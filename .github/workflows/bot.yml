@@ -1,0 +1,28 @@
+name: Binance Bot Automation
+
+on:
+  workflow_dispatch: # Direct manually run karne ke liye
+  schedule:
+    - cron: '0 * * * *' # Har 1 ghante baad chalne ke liye
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: |
+          pip install python-binance pandas
+
+      - name: Run Main Script
+        env:
+          BINANCE_API_KEY: ${{ secrets.BINANCE_API_KEY }}
+          BINANCE_SECRET_KEY: ${{ secrets.BINANCE_SECRET_KEY }}
+        run: python main.py
