@@ -1,52 +1,67 @@
 import os
-import pandas as pd
+import sys
 from binance.client import Client
+from binance.exceptions import BinanceAPIException
 
-API_KEY = os.getenv('BINANCE_API_KEY')
-API_SECRET = os.getenv('BINANCE_SECRET_KEY')
+# GitHub Secrets ya Environment Variables se API Keys lena
+API_KEY = os.getenv("BINANCE_API_KEY")
+API_SECRET = os.getenv("BINANCE_SECRET_KEY")
 
+if not API_KEY or not API_SECRET:
+    print("Error: BINANCE_API_KEY or BINANCE_SECRET_KEY environment variables not set.")
+    sys.exit(1)
+
+# Binance Client initialize karna
 client = Client(API_KEY, API_SECRET)
 
-SYMBOL = 'BTCUSDT'
-QUANTITY = 0.001  # Trade size
-
-def get_rsi(symbol, interval='1m', lookback='100m'):
-    # Market data fetch karna
-    klines = client.get_historical_klines(symbol, interval, lookback)
-    df = pd.DataFrame(klines)
-    close = df[4].astype(float)
-    
-    # RSI Calculation (14 period)
-    delta = close.diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-    
-    rs = gain / loss
-    rsi = 100 - (100 / (1 + rs))
-    return rsi.iloc[-1]
+# Trading pair (Aap apni marzi ka pair rakh sakte hain, jese 'BTCUSDT' ya 'ETHUSDT')
+SYMBOL = "BTCUSDT"
 
 def execute_trade():
     try:
-        rsi = get_rsi(SYMBOL)
-        print(f"Current RSI for {SYMBOL}: {rsi:.2f}")
+        print("Checking account balance...")
+        # USDT ka balance check karna
+        balance = client.get_asset_balance(asset="USDT")
+        free_balance = float(balance['free'])
+        print(f"Available USDT Balance: {free_balance}")
 
-        # Buy Logic: Oversold condition (RSI < 30)
-        if rsi < 30:
-            print("RSI Low! Executing Buy Order...")
-            order = client.order_market_buy(symbol=SYMBOL, quantity=QUANTITY)
-            print(f"Buy Successful: {order['orderId']}")
+        # Minimum balance requirement (Binance ki taraf se min notional check)
+        if free_balance < 10.0:
+            print("Error: Balance is too low to place a trade (Minimum usually $10 required).")
+            return
 
-        # Sell Logic: Overbought condition (RSI > 70)
-        elif rsi > 70:
-            print("RSI High! Executing Sell Order...")
-            order = client.order_market_sell(symbol=SYMBOL, quantity=QUANTITY)
-            print(f"Sell Successful: {order['orderId']}")
+        # Double / All available amount use karne ke liye balance ka hisaab lagana
+        # Agar aap chahte hain ke har run par saara available balance use ho:
+        # Note: Binance par exact asset price ke mutabiq quantity nikalni parti hai.
+        
+        ticker = client.get_symbol_ticker(symbol=SYMBOL)
+        current_price = float(ticker['price'])
+        print(f"Current {SYMBOL} Price: {current_price}")
 
-        else:
-            print("RSI normal zone mein hai. Koi trade nahi lagai gayi.")
+        # Total free balance se maximum possible quantity nikalna (Thora buffer rakh kar taake insufficient funds ka error na aaye)
+        target_usdt = free_balance * 0.99  # 99% of free balance to account for fees
+        raw_quantity = target_usdt / current_price
 
+        # Binance ke rules ke mutabiq quantity ka decimal precision set karna (BTC ke liye aam taur par 5 decimals hote hain)
+        # Behtar hai ke hum step size handle karein, yahan standard 5 decimal use kar rahe hain:
+        quantity = round(raw_quantity, 5)
+
+        print(f"Attempting to buy {quantity} {SYMBOL} using ~{target_usdt} USDT...")
+
+        # Market Buy Order Place karna (Direct Trading)
+        order = client.order_market_buy(
+            symbol=SYMBOL,
+            quantity=quantity
+        )
+        
+        print("Trade executed successfully!")
+        print(order)
+
+    except BinanceAPIException as e:
+        print(f"Binance API Error: {e}")
     except Exception as e:
-        print(f"Trading Error: {e}")
+        print(f"An unexpected error occurred: {e}")
 
 if __name__ == "__main__":
+    print("Starting Automated Trading Bot Script...")
     execute_trade()
