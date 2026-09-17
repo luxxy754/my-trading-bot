@@ -3,9 +3,10 @@ import os
 from binance.client import Client
 from binance.exceptions import BinanceAPIException
 
-# Apni Binance API keys yahan dalein
-BINANCE_API_KEY = "pgKH0vWpIrrLerJvkpbGLI2p0scCLu0PNa1CL577Rh6N14clFO80INI6nMxJ8KrE"
-BINANCE_SECRET_KEY = "hLzgrlqIb0kTy9U29svB2fUP4DZnK75bfQIOMD4pCnbmjCSA3kpaFnpWqyfyJLgN"
+# API Keys aur Proxy details GitHub Secrets (Environment Variables) se read hongi
+BINANCE_API_KEY = os.environ.get("BINANCE_API_KEY")
+BINANCE_SECRET_KEY = os.environ.get("BINANCE_SECRET_KEY")
+PROXY_URL = os.environ.get("PROXY_URL")
 
 # Configurations
 TRADE_AMOUNT_USDT = 5.0  # Har trade ki investment (USDT)
@@ -93,7 +94,21 @@ def execute_real_trade(client, symbol, side, current_price):
 
 def run_bot():
     try:
-        client = Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
+        # Proxy Parameters Setup
+        requests_params = {}
+        if PROXY_URL:
+            requests_params = {
+                'http': PROXY_URL,
+                'https': PROXY_URL
+            }
+
+        # Binance Client Setup with optional Proxy support
+        client = Client(
+            BINANCE_API_KEY, 
+            BINANCE_SECRET_KEY,
+            requests_params=requests_params if requests_params else None
+        )
+
         print("Success: Connected to Binance Live Trading Mode!")
         print(f"Bot ab live market scan aur trading karega ({len(COINS_TO_SCAN)} coins)...\n")
 
@@ -128,7 +143,6 @@ def run_bot():
                 
                 print(f"[{time.strftime('%H:%M:%S')}] {symbol} | Price: {current_price} | Change: {price_change_pct:+.3f}%")
                 
-                side = None
                 side = None
                 if price_change_pct >= 0.10 and current_price >= avg_price:
                     side = "BUY"
